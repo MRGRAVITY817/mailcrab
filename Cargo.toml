@@ -1,10 +1,19 @@
 [package]
+authors = ["Hoon Wee <mrgravity817@gmail.com>"]
 edition = "2021"
 name = "z2p"
 version = "0.1.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "z2p"
+path = "src/main.rs"
 
 [dependencies]
 actix-web = "4"
 tokio = {version = "1", features = ["macros", "rt-multi-thread"]}
+
+[dev-dependencies]
+reqwest = "0.11"
