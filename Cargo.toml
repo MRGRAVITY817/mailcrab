@@ -1,14 +1,14 @@
 [package]
 authors = ["Hoon Wee <mrgravity817@gmail.com>"]
 edition = "2021"
-name = "z2p"
+name = "mailcrab"
 version = "0.1.0"
 
 [lib]
 path = "src/lib.rs"
 
 [[bin]]
-name = "z2p"
+name = "mailcrab"
 path = "src/main.rs"
 
 [dependencies]

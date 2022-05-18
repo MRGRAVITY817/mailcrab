@@ -1,5 +1,5 @@
 use std::net::TcpListener;
-use z2p::run;
+use mailcrab::run;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
