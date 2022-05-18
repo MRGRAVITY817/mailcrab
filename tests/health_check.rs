@@ -1,4 +1,10 @@
-use {mailcrab::configuration::get_configuration, sqlx::PgPool, std::net::TcpListener};
+use {
+    mailcrab::configuration::{get_configuration, DatabaseSettings},
+    sqlx::PgPool,
+    sqlx::{Connection, Executor, PgConnection},
+    std::net::TcpListener,
+    uuid::Uuid,
+};
 
 pub struct TestApp {
     pub address: String,
@@ -6,17 +12,42 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
+    // TcpListener setting
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
     let address = format!("http://127.0.0.1:{}", port);
-    let app_config = get_configuration().expect("Failed to read configuration.");
-    let db_pool = PgPool::connect(&app_config.database.connection_string())
-        .await
-        .expect("Failed to connect to Postgres.");
+
+    // Database pool setting
+    let mut app_config = get_configuration().expect("Failed to read configuration.");
+    app_config.database.database_name = Uuid::new_v4().to_string();
+    let db_pool = configure_database(&app_config.database).await;
+
+    // Launch the server as a background task using `tokio::spawn`
     let server = mailcrab::startup::run(listener, db_pool.clone()).expect("Failed to bind address");
-    // Lauch the server as a background task
     let _ = tokio::spawn(server);
     TestApp { address, db_pool }
+}
+
+pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+    // Create database
+    let mut connection = PgConnection::connect(&config.connection_string_without_db())
+        .await
+        .expect("Failed to connect to Postgres.");
+    connection
+        .execute(format!(r#"CREATE DATABASE "{}";"#, config.database_name).as_str())
+        .await
+        .expect("Failed to create database.");
+
+    // Migrate database
+    let db_pool = PgPool::connect(&config.connection_string())
+        .await
+        .expect("Failed to connect to Postgres.");
+    sqlx::migrate!("./migrations")
+        .run(&db_pool)
+        .await
+        .expect("Failed to migrate the database");
+
+    db_pool
 }
 
 #[tokio::test]
@@ -47,7 +78,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let body = "name=hoon%20wee&email=mrgravity817%40gmail.com";
     let response = client
         .post(&format!("{}/subscriptions", &test_app.address))
-        .header("Content-Type", "application/x-www-from-urlencoded")
+        .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
         .await
@@ -60,7 +91,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await
         .expect("Failed to fetch saved subscriptions.");
     assert_eq!(saved.email, "mrgravity817@gmail.com");
-    assert_eq!(saved.name, "hoon");
+    assert_eq!(saved.name, "hoon wee");
 }
 
 #[tokio::test]
@@ -77,7 +108,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     for (invalid_body, error_message) in test_cases {
         let response = client
             .post(&format!("{}/subscriptions", &test_app.address))
-            .header("Content-Type", "application/x-www-from-urlencoded")
+            .header("Content-Type", "application/x-www-form-urlencoded")
             .body(invalid_body)
             .send()
             .await
