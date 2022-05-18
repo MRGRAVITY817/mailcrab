@@ -4,11 +4,14 @@ use {
     std::net::TcpListener,
     tracing::subscriber::set_global_default,
     tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer},
+    tracing_log::LogTracer,
     tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry},
 };
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // Init logger
+    LogTracer::init().expect("Failed to set logger");
     // This will filter the RUST_LOG env variable. Defaulted as `RUST_LOG=info`.
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     // This will format log from JSON to Bunyan. https://github.com/trentm/node-bunyan
