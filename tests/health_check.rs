@@ -1,10 +1,19 @@
 use {
-    mailcrab::configuration::{get_configuration, DatabaseSettings},
-    sqlx::PgPool,
-    sqlx::{Connection, Executor, PgConnection},
+    mailcrab::{
+        configuration::{get_configuration, DatabaseSettings},
+        telemetry::{get_subscriber, init_subscriber},
+    },
+    once_cell::sync::Lazy,
+    sqlx::{Connection, Executor, PgConnection, PgPool},
     std::net::TcpListener,
     uuid::Uuid,
 };
+
+// Subscriber should be created once (singleton pattern)
+static TRACING: Lazy<()> = Lazy::new(|| {
+    let subscriber = get_subscriber("test".into(), "debug".into());
+    init_subscriber(subscriber);
+});
 
 pub struct TestApp {
     pub address: String,
@@ -12,6 +21,9 @@ pub struct TestApp {
 }
 
 async fn spawn_app() -> TestApp {
+    // Init subscriber by forcing our lazy TRACING
+    Lazy::force(&TRACING);
+
     // TcpListener setting
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
@@ -22,7 +34,7 @@ async fn spawn_app() -> TestApp {
     app_config.database.database_name = Uuid::new_v4().to_string();
     let db_pool = configure_database(&app_config.database).await;
 
-    // Launch the server as a background task using `tokio::spawn`
+    // Launch the server as a background task
     let server = mailcrab::startup::run(listener, db_pool.clone()).expect("Failed to bind address");
     let _ = tokio::spawn(server);
     TestApp { address, db_pool }
