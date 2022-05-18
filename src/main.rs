@@ -11,7 +11,7 @@ use {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     // Init subscriber
-    let subscriber = get_subscriber("mailcrab".into(), "info".into());
+    let subscriber = get_subscriber("mailcrab".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
 
     // Configuration
