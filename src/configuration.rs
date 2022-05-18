@@ -17,12 +17,10 @@ pub struct DatabaseSettings {
 
 impl DatabaseSettings {
     pub fn connection_string(&self) -> String {
-        "postgres://{self.username}:{self.password}@{self.host}:{self.port}/{self.database_name}"
-            .to_string()
-        // format!(
-        // 	"postgres://{}:{}@{}:{}/{}",
-        // 	self.username, self.password, self.host, self.port,self.database_name
-        // )
+        format!(
+            "postgres://{}:{}@{}:{}/{}",
+            self.username, self.password, self.host, self.port, self.database_name
+        )
     }
 }
 
