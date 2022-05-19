@@ -1,3 +1,5 @@
+use sqlx::postgres::PgPoolOptions;
+
 use {
     mailcrab::{
         configuration::get_config,
@@ -5,7 +7,6 @@ use {
         telemetry::{get_subscriber, init_subscriber},
     },
     secrecy::ExposeSecret,
-    sqlx::PgPool,
     std::net::TcpListener,
 };
 
@@ -17,13 +18,17 @@ async fn main() -> std::io::Result<()> {
 
     // Configuration
     let app_config = get_config().expect("Failed to read configuration");
-    let connection_pool =
-        PgPool::connect_lazy(&app_config.database.connection_string().expose_secret())
-            .expect("Failed to connect to Postgres.");
+
+    let connection_pool = PgPoolOptions::new()
+        .connect_timeout(std::time::Duration::from_secs(2))
+        .connect_lazy(&app_config.database.connection_string().expose_secret())
+        .expect("Failed to create Postgres connection pool.");
+
     let address = format!(
         "{}:{}",
         app_config.application.host, app_config.application.port
     );
+
     let listener = TcpListener::bind(address)?;
     run(listener, connection_pool)?.await
 }
