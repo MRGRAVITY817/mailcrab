@@ -1,5 +1,5 @@
 use {
-    crate::domain::{NewSubscriber, SubscriberName},
+    crate::domain::{NewSubscriber, SubscriberEmail, SubscriberName},
     actix_web::{
         web::{Data, Form},
         HttpResponse,
@@ -25,7 +25,10 @@ pub struct FormData {
     )
 )]
 pub async fn subscribe(form: Form<FormData>, pool: Data<PgPool>) -> HttpResponse {
-    let email = form.0.email;
+    let email = match SubscriberEmail::parse(form.0.email) {
+        Ok(email) => email,
+        Err(_) => return HttpResponse::BadRequest().finish(),
+    };
     let name = match SubscriberName::parse(form.0.name) {
         Ok(name) => name,
         Err(_) => return HttpResponse::BadRequest().finish(),
@@ -56,7 +59,7 @@ pub async fn insert_subscriber(
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        new_subscriber.email,
+        new_subscriber.email.as_ref(),
         new_subscriber.name.as_ref(),
         Utc::now()
     )
