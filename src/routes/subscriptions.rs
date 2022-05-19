@@ -1,4 +1,5 @@
 use {
+    crate::domain::{NewSubscriber, SubscriberName},
     actix_web::{
         web::{Data, Form},
         HttpResponse,
@@ -6,14 +7,13 @@ use {
     chrono::Utc,
     serde::Deserialize,
     sqlx::PgPool,
-    unicode_segmentation::UnicodeSegmentation,
     uuid::Uuid,
 };
 
 #[derive(Deserialize)]
 pub struct FormData {
-    name: String,
     email: String,
+    name: String,
 }
 
 #[tracing::instrument(
@@ -25,29 +25,25 @@ pub struct FormData {
     )
 )]
 pub async fn subscribe(form: Form<FormData>, pool: Data<PgPool>) -> HttpResponse {
-    if !is_valid_name(&form.name) {
-        return HttpResponse::BadRequest().finish();
-    }
-    match insert_subscriber(&pool, &form).await {
+    let new_subscriber = NewSubscriber {
+        email: form.0.email,
+        name: SubscriberName::parse(form.0.name),
+    };
+
+    match insert_subscriber(&pool, &new_subscriber).await {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
     }
 }
 
-pub fn is_valid_name(name: &str) -> bool {
-    let is_empty_or_whitespace = name.trim().is_empty();
-    let is_too_long = name.graphemes(true).count() > 256;
-    let forbidden_chars = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
-    let contains_forbidden_chars = name.chars().any(|c| forbidden_chars.contains(&c));
-
-    !(is_empty_or_whitespace || is_too_long || contains_forbidden_chars)
-}
-
 #[tracing::instrument(
     name = "Saving new subscriber details in the database",
-    skip(form, pool)
+    skip(new_subscriber, pool)
 )]
-pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
+pub async fn insert_subscriber(
+    pool: &PgPool,
+    new_subscriber: &NewSubscriber,
+) -> Result<(), sqlx::Error> {
     // `insert_subscriber` only focuses on database logic
     // it knows nothing about actix-specific stuffs,
     // which forms nice segregation when moving to another web framework
@@ -57,8 +53,8 @@ pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sql
         VALUES ($1, $2, $3, $4)
         "#,
         Uuid::new_v4(),
-        form.email,
-        form.name,
+        new_subscriber.email,
+        new_subscriber.name.as_ref(),
         Utc::now()
     )
     .execute(pool)
