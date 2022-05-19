@@ -1,5 +1,3 @@
-use sqlx::postgres::PgPoolOptions;
-
 use {
     mailcrab::{
         configuration::get_config,
@@ -7,6 +5,7 @@ use {
         telemetry::{get_subscriber, init_subscriber},
     },
     secrecy::ExposeSecret,
+    sqlx::postgres::PgPoolOptions,
     std::net::TcpListener,
 };
 
