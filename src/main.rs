@@ -21,7 +21,7 @@ async fn main() -> std::io::Result<()> {
 
     let connection_pool = PgPoolOptions::new()
         .connect_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy(&app_config.database.connection_string().expose_secret())
+        .connect_lazy(app_config.database.connection_string().expose_secret())
         .expect("Failed to create Postgres connection pool.");
 
     let address = format!(

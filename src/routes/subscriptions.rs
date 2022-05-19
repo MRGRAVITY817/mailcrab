@@ -17,17 +17,16 @@ pub struct FormData {
 
 #[tracing::instrument(
     name = "Adding a new subscriber", 
-    skip(form, pool), 
+    skip(form, pool),
     fields(
-        subscriber_email = %form.email, 
+        subscriber_email = %form.email,
         subscriber_name = %form.name
     )
 )]
 pub async fn subscribe(form: Form<FormData>, pool: Data<PgPool>) -> HttpResponse {
-    match insert_subscriber(&pool, &form).await
-    {
+    match insert_subscriber(&pool, &form).await {
         Ok(_) => HttpResponse::Ok().finish(),
-        Err(_) => HttpResponse::InternalServerError().finish() 
+        Err(_) => HttpResponse::InternalServerError().finish(),
     }
 }
 
@@ -37,7 +36,7 @@ pub async fn subscribe(form: Form<FormData>, pool: Data<PgPool>) -> HttpResponse
 )]
 pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sqlx::Error> {
     // `insert_subscriber` only focuses on database logic
-    // it knows nothing about actix-specific stuffs, 
+    // it knows nothing about actix-specific stuffs,
     // which forms nice segregation when moving to another web framework
     sqlx::query!(
         r#"
@@ -52,8 +51,8 @@ pub async fn insert_subscriber(pool: &PgPool, form: &FormData) -> Result<(), sql
     .execute(pool)
     .await
     .map_err(|e| {
-            tracing::error!("Failed to execute query: {:?}", e);
-            e
+        tracing::error!("Failed to execute query: {:?}", e);
+        e
     })?;
     Ok(())
 }
