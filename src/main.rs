@@ -1,6 +1,6 @@
 use {
     mailcrab::{
-        configuration::get_configuration,
+        configuration::get_config,
         startup::run,
         telemetry::{get_subscriber, init_subscriber},
     },
@@ -16,11 +16,14 @@ async fn main() -> std::io::Result<()> {
     init_subscriber(subscriber);
 
     // Configuration
-    let app_config = get_configuration().expect("Failed to read configuration");
-    let connection_pool = PgPool::connect(&app_config.database.connection_string().expose_secret())
-        .await
-        .expect("Failed to connect to Postgres.");
-    let address = format!("127.0.0.1:{}", app_config.application_port);
+    let app_config = get_config().expect("Failed to read configuration");
+    let connection_pool =
+        PgPool::connect_lazy(&app_config.database.connection_string().expose_secret())
+            .expect("Failed to connect to Postgres.");
+    let address = format!(
+        "{}:{}",
+        app_config.application.host, app_config.application.port
+    );
     let listener = TcpListener::bind(address)?;
     run(listener, connection_pool)?.await
 }

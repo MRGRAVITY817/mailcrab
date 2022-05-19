@@ -1,6 +1,6 @@
 use {
     mailcrab::{
-        configuration::{get_configuration, DatabaseSettings},
+        configuration::{get_config, DatabaseSettings},
         telemetry::{get_subscriber, init_subscriber},
     },
     once_cell::sync::Lazy,
@@ -38,7 +38,7 @@ async fn spawn_app() -> TestApp {
     let address = format!("http://127.0.0.1:{}", port);
 
     // Database pool setting
-    let mut app_config = get_configuration().expect("Failed to read configuration.");
+    let mut app_config = get_config().expect("Failed to read configuration.");
     app_config.database.database_name = Uuid::new_v4().to_string();
     let db_pool = configure_database(&app_config.database).await;
 
