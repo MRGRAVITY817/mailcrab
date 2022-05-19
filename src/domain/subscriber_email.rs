@@ -45,6 +45,7 @@ mod tests {
         assert_err!(SubscriberEmail::parse(email));
     }
 
+    // Prop testing random valid emails
     #[derive(Debug, Clone)]
     struct ValidEmailFixture(pub String);
 

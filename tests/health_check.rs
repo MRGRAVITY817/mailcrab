@@ -1,6 +1,7 @@
 use {
     mailcrab::{
         configuration::{get_config, DatabaseSettings},
+        email_client::EmailClient,
         telemetry::{get_subscriber, init_subscriber},
     },
     once_cell::sync::Lazy,
@@ -41,8 +42,16 @@ async fn spawn_app() -> TestApp {
     app_config.database.database_name = Uuid::new_v4().to_string();
     let db_pool = configure_database(&app_config.database).await;
 
+    // Email client setting
+    let sender_email = app_config
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let email_client = EmailClient::new(app_config.email_client.base_url, sender_email);
+
     // Launch the server as a background task
-    let server = mailcrab::startup::run(listener, db_pool.clone()).expect("Failed to bind address");
+    let server = mailcrab::startup::run(listener, db_pool.clone(), email_client)
+        .expect("Failed to bind address");
     let _ = tokio::spawn(server);
     TestApp { address, db_pool }
 }
