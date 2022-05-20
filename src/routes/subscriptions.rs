@@ -48,13 +48,22 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    // Send subscription mail, and check if the server returns error
+    // Send confirmation email
+    let confirmation_link = "https://my-api.com/subscriptions/confirm";
     if email_client
         .send_email(
             new_subscriber.email,
             "Welcome",
-            "Welcome to mailcrab",
-            "Welcome to maincrab",
+            &format!(
+                "Welcome to our newsletter!<br />\
+            Click <a href=\"{}\">here</a> to confirm your subscription.",
+                confirmation_link
+            ),
+            &format!(
+                "Welcome to our newsletter!\n
+            Visit {} to confirm your subscription.",
+                confirmation_link
+            ),
         )
         .await
         .is_err()
