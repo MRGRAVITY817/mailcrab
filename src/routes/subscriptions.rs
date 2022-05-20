@@ -2,6 +2,7 @@ use {
     crate::{
         domain::{NewSubscriber, SubscriberEmail, SubscriberName},
         email_client::EmailClient,
+        startup::ApplicationBaseUrl,
     },
     actix_web::{
         web::{Data, Form},
@@ -27,7 +28,7 @@ pub fn parse_subscriber(form: FormData) -> Result<NewSubscriber, String> {
 
 #[tracing::instrument(
     name = "Adding a new subscriber", 
-    skip(form, pool, email_client),
+    skip(form, pool, email_client, base_url),
     fields(
         subscriber_email = %form.email,
         subscriber_name = %form.name
@@ -37,6 +38,7 @@ pub async fn subscribe(
     form: Form<FormData>,
     pool: Data<PgPool>,
     email_client: Data<EmailClient>,
+    base_url: Data<ApplicationBaseUrl>,
 ) -> HttpResponse {
     let new_subscriber = match parse_subscriber(form.0) {
         Ok(subscriber) => subscriber,
@@ -48,7 +50,7 @@ pub async fn subscribe(
         return HttpResponse::InternalServerError().finish();
     }
 
-    if send_confirmation_email(&email_client, new_subscriber)
+    if send_confirmation_email(&email_client, new_subscriber, &base_url.0)
         .await
         .is_err()
     {
@@ -60,13 +62,17 @@ pub async fn subscribe(
 
 #[tracing::instrument(
     name = "Send a confirmation email to a new subscriber",
-    skip(email_client, new_subscriber)
+    skip(email_client, new_subscriber, base_url)
 )]
 pub async fn send_confirmation_email(
     email_client: &EmailClient,
     new_subscriber: NewSubscriber,
+    base_url: &str,
 ) -> Result<(), reqwest::Error> {
-    let confirmation_link = "https://my-api.com/subscriptions/confirm";
+    let confirmation_link = format!(
+        "{}/subscriptions/confirm?subscription_token=mytoken",
+        base_url
+    );
     let plain_body = format!(
         "Welcome to our newsletter!\n
             Visit {} to confirm your subscription.",

@@ -1,6 +1,6 @@
 use mailcrab::{
     configuration::get_config,
-    startup::build,
+    startup::Application,
     telemetry::{get_subscriber, init_subscriber},
 };
 
@@ -10,8 +10,8 @@ async fn main() -> std::io::Result<()> {
     init_subscriber(subscriber);
 
     let app_config = get_config().expect("Failed to read configuration");
-    let server = build(app_config).await?;
+    let main_app = Application::build(app_config).await?;
+    main_app.run_until_stopped().await?;
 
-    server.await?;
     Ok(())
 }
