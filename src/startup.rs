@@ -33,7 +33,7 @@ pub fn run(
 
 pub async fn build(app_config: Settings) -> Result<Server, std::io::Error> {
     // Postgres connection pool
-    let connection_pool = get_connection_pool(&app_config.database);
+    let db_pool = get_db_pool(&app_config.database);
 
     // Email client
     let sender_email = app_config
@@ -54,10 +54,10 @@ pub async fn build(app_config: Settings) -> Result<Server, std::io::Error> {
     );
 
     let listener = TcpListener::bind(address)?;
-    run(listener, connection_pool, email_client)
+    run(listener, db_pool, email_client)
 }
 
-pub fn get_connection_pool(db_config: &DatabaseSettings) -> PgPool {
+pub fn get_db_pool(db_config: &DatabaseSettings) -> PgPool {
     PgPoolOptions::new()
         .connect_timeout(std::time::Duration::from_secs(2))
         .connect_lazy_with(db_config.with_db())
@@ -70,7 +70,7 @@ pub struct Application {
 
 impl Application {
     pub async fn build(app_config: Settings) -> Result<Self, std::io::Error> {
-        let connection_pool = get_connection_pool(&app_config.database);
+        let db_pool = get_db_pool(&app_config.database);
         // Email client
         let sender_email = app_config
             .email_client
@@ -90,7 +90,7 @@ impl Application {
         );
         let listener = TcpListener::bind(&address)?;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, connection_pool, email_client)?;
+        let server = run(listener, db_pool, email_client)?;
 
         Ok(Self { port, server })
     }
