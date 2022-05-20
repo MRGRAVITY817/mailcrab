@@ -1,12 +1,11 @@
 use {
     mailcrab::{
         configuration::{get_config, DatabaseSettings},
-        email_client::EmailClient,
+        startup::{get_connection_pool, Application},
         telemetry::{get_subscriber, init_subscriber},
     },
     once_cell::sync::Lazy,
     sqlx::{Connection, Executor, PgConnection, PgPool},
-    std::net::TcpListener,
     uuid::Uuid,
 };
 
@@ -29,37 +28,28 @@ pub struct TestApp {
 }
 
 pub async fn spawn_app() -> TestApp {
-    // Init subscriber by forcing our lazy TRACING
+    // Init tracing subscriber
     Lazy::force(&TRACING);
 
-    // TcpListener setting
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+    let app_config = {
+        let mut c = get_config().expect("Failed to read configuration.");
+        c.database.database_name = Uuid::new_v4().to_string();
+        c.application.port = 0;
+        c
+    };
 
-    // Database pool setting
-    let mut app_config = get_config().expect("Failed to read configuration.");
-    app_config.database.database_name = Uuid::new_v4().to_string();
-    let db_pool = configure_database(&app_config.database).await;
+    configure_database(&app_config.database).await;
 
-    // Email client setting
-    let sender_email = app_config
-        .email_client
-        .sender()
-        .expect("Invalid sender email address.");
-    let timeout = app_config.email_client.timeout();
-    let email_client = EmailClient::new(
-        app_config.email_client.base_url,
-        sender_email,
-        app_config.email_client.auth_token,
-        timeout,
-    );
+    let application = Application::build(app_config.clone())
+        .await
+        .expect("Failed to build application");
+    let address = format!("http://127.0.0.1:{}", application.port());
+    let _ = tokio::spawn(application.run_until_stopped());
 
-    // Launch the server as a background task
-    let server = mailcrab::startup::run(listener, db_pool.clone(), email_client)
-        .expect("Failed to bind address");
-    let _ = tokio::spawn(server);
-    TestApp { address, db_pool }
+    TestApp {
+        address,
+        db_pool: get_connection_pool(&app_config.database),
+    }
 }
 
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
