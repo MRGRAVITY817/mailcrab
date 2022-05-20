@@ -117,39 +117,42 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_empty() {
 #[tokio::test]
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     // Arrange
-    let app = spawn_app().await;
+    let test_app = spawn_app().await;
     let body = "name=hoon%2wee&email=mrgravity817%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
-        .mount(&app.email_server)
+        .mount(&test_app.email_server)
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    test_app.post_subscriptions(body.into()).await;
 
     // Assert
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
+    let confirmation_links = test_app.get_confirmation_links(email_request);
+    assert_eq!(confirmation_links.html, confirmation_links.plain_text);
 }
 
 #[tokio::test]
 async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // Arrange
-    let app = spawn_app().await;
+    let test_app = spawn_app().await;
     let body = "name=hoon%2wee&email=mrgravity817%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
         .respond_with(ResponseTemplate::new(200))
-        .mount(&app.email_server)
+        .mount(&test_app.email_server)
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    test_app.post_subscriptions(body.into()).await;
 
     // Assert
-    let email_request = &app.email_server.received_requests().await.unwrap()[0];
+    let email_request = &test_app.email_server.received_requests().await.unwrap()[0];
     let body: serde_json::Value = serde_json::from_slice(&email_request.body).unwrap();
     let get_link = |s: &str| -> String {
         let links = linkify::LinkFinder::new()
