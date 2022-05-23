@@ -32,6 +32,7 @@ uuid = {version = "0.8.1", features = ["v4"]}
 validator = "0.14"
 thiserror = "1"
 anyhow = "1"
+base64 = "0.13"
 
 [dev-dependencies]
 fake = "~2.3"
