@@ -1,6 +1,3 @@
-use actix_web::ResponseError;
-use reqwest::StatusCode;
-
 use {
     crate::{
         domain::{NewSubscriber, SubscriberEmail, SubscriberName},
@@ -9,10 +6,12 @@ use {
     },
     actix_web::{
         web::{Data, Form},
-        HttpResponse,
+        HttpResponse, ResponseError,
     },
+    anyhow::Context,
     chrono::Utc,
     rand::{distributions::Alphanumeric, thread_rng, Rng},
+    reqwest::StatusCode,
     serde::Deserialize,
     sqlx::{PgPool, Postgres, Transaction},
     uuid::Uuid,
@@ -54,21 +53,24 @@ pub async fn subscribe(
 ) -> Result<HttpResponse, SubscribeError> {
     let new_subscriber = parse_subscriber(form.0).map_err(SubscribeError::ValidationError)?;
 
-    let mut transaction = pool.begin().await.map_err(SubscribeError::DatabaseError)?;
+    let mut transaction = pool
+        .begin()
+        .await
+        .context("Failed to acquire a Postgres connection from the pool")?;
 
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
         .await
-        .map_err(SubscribeError::InsertSubscriberError)?;
-    let subscription_token = generate_subscription_token();
+        .context("Failed to insert new subscriber in the database.")?;
 
+    let subscription_token = generate_subscription_token();
     store_token(&mut transaction, subscriber_id, &subscription_token)
         .await
-        .map_err(SubscribeError::StoreTokenError)?;
+        .context("Failed to store the confirmation token for a new subscriber.")?;
 
     transaction
         .commit()
         .await
-        .map_err(SubscribeError::TransactionCommitError)?;
+        .context("Failed to commit SQL transaction to store a new subscriber.")?;
 
     send_confirmation_email(
         &email_client,
@@ -77,7 +79,7 @@ pub async fn subscribe(
         &subscription_token,
     )
     .await
-    .map_err(SubscribeError::SendEmailError)?;
+    .context("Failed to send a confirmation email.")?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -86,16 +88,17 @@ pub async fn subscribe(
 pub enum SubscribeError {
     #[error("{0}")]
     ValidationError(String),
-    #[error("Failed to acquire a Postgres connection from the pool.")]
-    DatabaseError(#[source] sqlx::Error),
-    #[error("Failed to insert new subscriber in the database.")]
-    InsertSubscriberError(#[source] sqlx::Error),
-    #[error("Failed to store the confirmation token for a new subscriber.")]
-    StoreTokenError(#[source] StoreTokenError),
-    #[error("Failed to commit SQL transaction to store a new subscriber.")]
-    TransactionCommitError(#[source] sqlx::Error),
-    #[error("Failed to send a confirmation email.")]
-    SendEmailError(#[from] reqwest::Error),
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
+}
+
+impl ResponseError for SubscribeError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::ValidationError(_) => StatusCode::BAD_REQUEST,
+            Self::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }
 
 impl std::fmt::Debug for SubscribeError {

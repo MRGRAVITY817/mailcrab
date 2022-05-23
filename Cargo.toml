@@ -22,7 +22,7 @@ secrecy = {version = "0.8", features = ["serde"]}
 serde = {version = "1", features = ["derive"]}
 serde-aux = "3"
 tokio = {version = "1", features = ["macros", "rt-multi-thread"]}
-tracing = {version = "0.1", features = ["log"]}
+tracing = "0.1"
 tracing-actix-web = "0.5"
 tracing-bunyan-formatter = "0.3"
 tracing-log = "0.1"
@@ -31,6 +31,7 @@ unicode-segmentation = "1"
 uuid = {version = "0.8.1", features = ["v4"]}
 validator = "0.14"
 thiserror = "1"
+anyhow = "1"
 
 [dev-dependencies]
 fake = "~2.3"
