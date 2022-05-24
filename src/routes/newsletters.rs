@@ -1,14 +1,12 @@
-use std::str::FromStr;
-
-use actix_web::http::header;
-use reqwest::header::HeaderValue;
-
 use {
     crate::{domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt},
-    actix_web::{http::header::HeaderMap, web, HttpRequest, HttpResponse, ResponseError},
+    actix_web::{
+        http::header::{self, HeaderMap, HeaderValue},
+        web, HttpRequest, HttpResponse, ResponseError,
+    },
     anyhow::Context,
     reqwest::StatusCode,
-    secrecy::Secret,
+    secrecy::{ExposeSecret, Secret},
     sqlx::PgPool,
 };
 
@@ -58,13 +56,23 @@ impl ResponseError for PublishError {
     }
 }
 
+#[tracing::instrument(
+    name = "Publish a newsletter issue",
+    skip(body, pool, email_client, request),
+    fields(username = tracing::field::Empty, user_id = tracing::field::Empty)
+)]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     request: HttpRequest,
 ) -> Result<HttpResponse, PublishError> {
-    let _credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
+    let credentials = basic_authentication(request.headers()).map_err(PublishError::AuthError)?;
+    tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
+
+    let user_id = validate_credentials(credentials, &pool).await?;
+    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
         match subscriber {
@@ -155,4 +163,28 @@ async fn get_confirmed_subscribers(
     .collect();
 
     Ok(confirmed_subscribers)
+}
+
+async fn validate_credentials(
+    crendentials: Credentials,
+    pool: &PgPool,
+) -> Result<uuid::Uuid, PublishError> {
+    let user_id = sqlx::query!(
+        r#"
+        SELECT user_id
+        FROM users
+        WHERE username = $1 AND password = $2
+        "#,
+        crendentials.username,
+        crendentials.password.expose_secret()
+    )
+    .fetch_optional(pool)
+    .await
+    .context("Failed to perform a query to validate auth credentials.")
+    .map_err(PublishError::UnexpectedError)?;
+
+    user_id
+        .map(|row| row.user_id)
+        .ok_or_else(|| anyhow::anyhow!("Invalid username or password."))
+        .map_err(PublishError::AuthError)
 }
