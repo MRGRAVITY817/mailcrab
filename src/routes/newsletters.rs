@@ -1,3 +1,8 @@
+use std::str::FromStr;
+
+use actix_web::http::header;
+use reqwest::header::HeaderValue;
+
 use {
     crate::{domain::SubscriberEmail, email_client::EmailClient, routes::error_chain_fmt},
     actix_web::{http::header::HeaderMap, web, HttpRequest, HttpResponse, ResponseError},
@@ -34,10 +39,21 @@ impl std::fmt::Debug for PublishError {
 }
 
 impl ResponseError for PublishError {
-    fn status_code(&self) -> StatusCode {
+    // `fn status_code()` is invoked by the default `error_response` implementation
+    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
         match self {
-            PublishError::AuthError(_) => StatusCode::UNAUTHORIZED,
-            PublishError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            PublishError::UnexpectedError(_) => {
+                HttpResponse::new(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            PublishError::AuthError(_) => {
+                let mut response = HttpResponse::new(StatusCode::UNAUTHORIZED);
+                let header_value = HeaderValue::from_str(r#"Basic realm="publish""#).unwrap();
+                response
+                    .headers_mut()
+                    .insert(header::WWW_AUTHENTICATE, header_value);
+
+                response
+            }
         }
     }
 }

@@ -13,6 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 actix-web = "4"
+anyhow = "1"
+base64 = "0.13"
 chrono = "0.4.15"
 claim = "0.5"
 config = "0.11"
@@ -21,6 +23,7 @@ reqwest = {version = "0.11", default-features = false, features = ["json", "rust
 secrecy = {version = "0.8", features = ["serde"]}
 serde = {version = "1", features = ["derive"]}
 serde-aux = "3"
+thiserror = "1"
 tokio = {version = "1", features = ["macros", "rt-multi-thread"]}
 tracing = "0.1"
 tracing-actix-web = "0.5"
@@ -30,9 +33,6 @@ tracing-subscriber = {version = "0.3", features = ["registry", "env-filter"]}
 unicode-segmentation = "1"
 uuid = {version = "0.8.1", features = ["v4"]}
 validator = "0.14"
-thiserror = "1"
-anyhow = "1"
-base64 = "0.13"
 
 [dev-dependencies]
 fake = "~2.3"
