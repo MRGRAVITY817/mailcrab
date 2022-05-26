@@ -1,5 +1,5 @@
 use {
-    argon2::{password_hash::SaltString, Argon2, PasswordHasher},
+    argon2::{password_hash::SaltString, Algorithm, Argon2, Params, PasswordHasher, Version},
     mailcrab::{
         configuration::{get_config, DatabaseSettings},
         startup::{get_db_pool, Application},
@@ -11,7 +11,7 @@ use {
     wiremock::MockServer,
 };
 
-// Subscriber should be created once (singleton pattern)
+// Subscriber should be created once ()
 static TRACING: Lazy<()> = Lazy::new(|| {
     let default_filter_level = "info".to_string();
     let subscriber_name = "test".to_string();
@@ -34,7 +34,7 @@ pub struct TestApp {
     pub address: String,
     pub db_pool: PgPool,
     pub email_server: MockServer,
-    test_user: TestUser,
+    pub test_user: TestUser,
 }
 
 impl TestApp {
@@ -103,10 +103,16 @@ impl TestUser {
 
     async fn store(&self, pool: &PgPool) {
         let salt = SaltString::generate(&mut rand::thread_rng());
-        let password_hash = Argon2::default()
-            .hash_password(self.password.as_bytes(), &salt)
-            .unwrap()
-            .to_string();
+        // Match parameters of the default password
+        let password_hash = Argon2::new(
+            Algorithm::Argon2id,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
+
         sqlx::query!(
             "INSERT INTO users (user_id, username, password_hash) VALUES ($1, $2, $3)",
             self.user_id,
