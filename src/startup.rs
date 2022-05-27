@@ -7,6 +7,7 @@ use {
         },
     },
     actix_web::{dev::Server, web, App, HttpServer},
+    secrecy::Secret,
     sqlx::{postgres::PgPoolOptions, PgPool},
     std::net::TcpListener,
     tracing_actix_web::TracingLogger,
@@ -39,7 +40,8 @@ impl Application {
         let listener = TcpListener::bind(&address)?;
         let base_url = app_config.application.base_url;
         let port = listener.local_addr().unwrap().port();
-        let server = run(listener, db_pool, email_client, base_url)?;
+        let hmac_secret = app_config.application.hmac_secret;
+        let server = run(listener, db_pool, email_client, base_url, hmac_secret)?;
 
         Ok(Self { port, server })
     }
@@ -60,6 +62,7 @@ pub fn run(
     db_pool: PgPool,
     email_client: EmailClient,
     base_url: String,
+    hmac_secret: Secret<String>,
 ) -> Result<Server, std::io::Error> {
     // `web::Data` is basically `Arc`, which will safely share the app state across threads
     let db_pool = web::Data::new(db_pool);
@@ -78,11 +81,16 @@ pub fn run(
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())
+            .app_data(web::Data::new(HmacSecret(hmac_secret.clone())))
     })
     .listen(listener)?
     .run();
     Ok(server)
 }
+
+/// A wrapper type to avoid conflict with other `web::Data<Secret<String>>` states.
+#[derive(Clone)]
+pub struct HmacSecret(pub Secret<String>);
 
 pub fn get_db_pool(db_config: &DatabaseSettings) -> PgPool {
     PgPoolOptions::new()

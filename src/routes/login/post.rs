@@ -1,11 +1,14 @@
-use actix_web::{web, HttpResponse, ResponseError};
-use reqwest::{header::LOCATION, StatusCode};
-use secrecy::Secret;
+use actix_web::{error::InternalError, web, HttpResponse};
+use hmac::{Hmac, Mac};
+use reqwest::header::LOCATION;
+use secrecy::{ExposeSecret, Secret};
+use sha2::Sha256;
 use sqlx::PgPool;
 
 use crate::{
     authentication::{validate_credentials, AuthError, Credentials},
     routes::error_chain_fmt,
+    startup::HmacSecret,
 };
 
 #[derive(serde::Deserialize)]
@@ -14,11 +17,15 @@ pub struct FormData {
     password: Secret<String>,
 }
 
-#[tracing::instrument(skip(form, pool), fields(username=tracing::field::Empty, user_id=tracing::field::Empty))]
+#[tracing::instrument(
+    skip(form, pool, secret), 
+    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+)]
 pub async fn login_submit(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
-) -> Result<HttpResponse, LoginError> {
+    secret: web::Data<HmacSecret>,
+) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
         username: form.0.username,
         password: form.0.password,
@@ -26,19 +33,39 @@ pub async fn login_submit(
     // Logs `username` input
     tracing::Span::current().record("username", &tracing::field::display(&credentials.username));
 
-    let user_id = validate_credentials(credentials, &pool)
-        .await
-        // Leads to `Authentication failed` error
-        .map_err(|e| match e {
-            AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
-            AuthError::UnexpectedError(_) => LoginError::AuthError(e.into()),
-        })?;
-    // Logs `user_id` from `users` table
-    tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
+    match validate_credentials(credentials, &pool).await {
+        Ok(user_id) => {
+            // Log `user_id` if available
+            tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
 
-    Ok(HttpResponse::SeeOther()
-        .insert_header((LOCATION, "/")) // Redirects to home when post succeeds.
-        .finish())
+            Ok(HttpResponse::SeeOther()
+                .insert_header((LOCATION, "/")) // Redirects to home when post succeeds.
+                .finish())
+        }
+        Err(e) => {
+            let e = match e {
+                AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
+                AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
+            };
+            let query_string = format!("error={}", urlencoding::Encoded::new(e.to_string()));
+            // Create HMAC tag to verify if the error string is from our API or not.
+            let hmac_tag = {
+                let mut mac =
+                    Hmac::<Sha256>::new_from_slice(secret.0.expose_secret().as_bytes()).unwrap();
+                mac.update(query_string.as_bytes());
+                mac.finalize().into_bytes()
+            };
+            let response = HttpResponse::SeeOther()
+                // `LOCATION` key will redirect to "/login?error=<error_message>&tag=<hmac_tag>"
+                .insert_header((
+                    LOCATION,
+                    format!("/login?{}&tag={:x}", query_string, hmac_tag),
+                ))
+                .finish();
+
+            Err(InternalError::from_response(e, response))
+        }
+    }
 }
 
 #[derive(thiserror::Error)]
@@ -52,18 +79,5 @@ pub enum LoginError {
 impl std::fmt::Debug for LoginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         error_chain_fmt(self, f)
-    }
-}
-
-impl ResponseError for LoginError {
-    fn status_code(&self) -> reqwest::StatusCode {
-        StatusCode::SEE_OTHER
-    }
-
-    fn error_response(&self) -> HttpResponse<actix_web::body::BoxBody> {
-        let encoded_error = urlencoding::Encoded::new(self.to_string());
-        HttpResponse::build(self.status_code())
-            .insert_header((LOCATION, format!("/login?error={}", encoded_error)))
-            .finish()
     }
 }
