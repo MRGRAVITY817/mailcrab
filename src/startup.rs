@@ -2,7 +2,9 @@ use {
     crate::{
         configuration::{DatabaseSettings, Settings},
         email_client::EmailClient,
-        routes::{confirm, health_check, home, login, login_form, publish_newsletter, subscribe},
+        routes::{
+            confirm, health_check, home, login_form, login_submit, publish_newsletter, subscribe,
+        },
     },
     actix_web::{dev::Server, web, App, HttpServer},
     sqlx::{postgres::PgPoolOptions, PgPool},
@@ -68,7 +70,7 @@ pub fn run(
             .wrap(TracingLogger::default())
             .route("/", web::get().to(home))
             .route("/login", web::get().to(login_form))
-            .route("/login", web::post().to(login))
+            .route("/login", web::post().to(login_submit))
             .route("/health_check", web::get().to(health_check))
             .route("/subscriptions", web::post().to(subscribe))
             .route("/subscriptions/confirm", web::get().to(confirm))
