@@ -19,6 +19,7 @@ base64 = "0.13"
 chrono = "0.4.15"
 claim = "0.5"
 config = "0.11"
+hex = "0.4"
 hmac = { version = "0.12", features = ["std"] }
 htmlescape = "0.3"
 rand = {version = "0.8", features = ["std_rng"]}
