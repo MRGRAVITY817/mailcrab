@@ -1,3 +1,5 @@
+use actix_web::cookie::Cookie;
+
 use {
     crate::{
         authentication::{validate_credentials, AuthError, Credentials},
@@ -46,6 +48,7 @@ pub async fn login_submit(
             };
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login"))
+                .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
 
             Err(InternalError::from_response(e, response))
