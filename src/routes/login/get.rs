@@ -1,8 +1,9 @@
-use actix_web::{http::header::ContentType, web, HttpResponse};
-use hmac::{Hmac, Mac};
-use secrecy::ExposeSecret;
-
-use crate::startup::HmacSecret;
+use {
+    crate::startup::HmacSecret,
+    actix_web::{http::header::ContentType, web, HttpResponse},
+    hmac::{Hmac, Mac},
+    secrecy::ExposeSecret,
+};
 
 #[derive(serde::Deserialize)]
 pub struct QueryParams {
