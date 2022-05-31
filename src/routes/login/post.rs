@@ -1,11 +1,10 @@
-use actix_web::cookie::Cookie;
 
 use {
     crate::{
         authentication::{validate_credentials, AuthError, Credentials},
         routes::error_chain_fmt,
     },
-    actix_web::{error::InternalError, web, HttpResponse},
+    actix_web::{error::InternalError, web, HttpResponse, cookie::Cookie},
     reqwest::header::LOCATION,
     secrecy::Secret,
     sqlx::PgPool,
@@ -48,6 +47,7 @@ pub async fn login_submit(
             };
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login"))
+                // To create ephemeral validation error, we use cookie.
                 .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
 
