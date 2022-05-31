@@ -12,6 +12,7 @@ name = "mailcrab"
 path = "src/main.rs"
 
 [dependencies]
+actix-session = { version = "0.6", features = ["redis-rs-tls-session"] }
 actix-web = "4"
 actix-web-flash-messages = { version = "0.3", features = ["cookies"] }
 anyhow = "1"
