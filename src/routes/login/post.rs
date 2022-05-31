@@ -1,10 +1,10 @@
-
 use {
     crate::{
         authentication::{validate_credentials, AuthError, Credentials},
         routes::error_chain_fmt,
     },
-    actix_web::{error::InternalError, web, HttpResponse, cookie::Cookie},
+    actix_web::{error::InternalError, web, HttpResponse},
+    actix_web_flash_messages::FlashMessage,
     reqwest::header::LOCATION,
     secrecy::Secret,
     sqlx::PgPool,
@@ -45,10 +45,10 @@ pub async fn login_submit(
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
             };
+            // To create ephemeral validation error, we use flash message.
+            FlashMessage::error(e.to_string()).send();
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login"))
-                // To create ephemeral validation error, we use cookie.
-                .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
 
             Err(InternalError::from_response(e, response))
