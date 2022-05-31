@@ -21,4 +21,7 @@ async fn an_error_flash_message_is_set_on_failure() {
     assert!(html_page.contains(r#"<p><i>Authentication failed</i></p>"#));
     // 3. Check if it redirects after error
     assert_is_redirect_to(&response, "/login");
+    // 4. Check again to see error message cookie deleted
+    let html_page = test_app.get_login_html().await;
+    assert!(!html_page.contains(r#"<p><i>Authentication failed</i></p>"#));
 }
