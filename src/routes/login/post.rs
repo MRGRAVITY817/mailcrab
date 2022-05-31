@@ -37,7 +37,7 @@ pub async fn login_submit(
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
 
             Ok(HttpResponse::SeeOther()
-                .insert_header((LOCATION, "/")) // Redirects to home when post succeeds.
+                .insert_header((LOCATION, "/admin/dashboard")) // Redirects to home when post succeeds.
                 .finish())
         }
         Err(e) => {

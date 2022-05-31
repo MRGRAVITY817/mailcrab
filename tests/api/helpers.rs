@@ -110,6 +110,18 @@ impl TestApp {
             .await
             .unwrap()
     }
+
+    /// Get HTML text from admin dashboard
+    pub async fn get_admin_dashboard(&self) -> String {
+        self.api_client
+            .get(&format!("{}/admin/dashbaord", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+            .text()
+            .await
+            .unwrap()
+    }
 }
 
 pub struct TestUser {
