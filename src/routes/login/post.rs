@@ -37,7 +37,9 @@ pub async fn login_submit(
         Ok(user_id) => {
             // Log `user_id` if available
             tracing::Span::current().record("user_id", &tracing::field::display(&user_id));
-
+            // Renew session token to avoid session fixation attacks.
+            // For more info, https://acrossecurity.com/papers/session_fixation.pdf
+            session.renew();
             session
                 .insert("user_id", user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
