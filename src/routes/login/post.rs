@@ -2,8 +2,8 @@ use {
     crate::{
         authentication::{validate_credentials, AuthError, Credentials},
         routes::error_chain_fmt,
+        session_state::TypedSession,
     },
-    actix_session::Session,
     actix_web::{error::InternalError, web, HttpResponse},
     actix_web_flash_messages::FlashMessage,
     reqwest::header::LOCATION,
@@ -19,12 +19,12 @@ pub struct FormData {
 
 #[tracing::instrument(
     skip(form, pool, session), 
-    fields(username=tracing::field::Empty, user_id=tracing::field::Empty)
+    fields(username = tracing::field::Empty, user_id = tracing::field::Empty)
 )]
 pub async fn login_submit(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
-    session: Session,
+    session: TypedSession,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
         username: form.0.username,
@@ -41,7 +41,7 @@ pub async fn login_submit(
             // For more info, https://acrossecurity.com/papers/session_fixation.pdf
             session.renew();
             session
-                .insert("user_id", user_id)
+                .insert_user_id(user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
             Ok(HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/admin/dashboard")) // Redirects to dashboard when post succeeds.

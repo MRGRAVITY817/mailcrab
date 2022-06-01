@@ -1,15 +1,17 @@
-use actix_session::Session;
-use actix_web::{http::header::ContentType, web, HttpResponse};
-use anyhow::Context;
-use sqlx::PgPool;
-use uuid::Uuid;
+use {
+    crate::session_state::TypedSession,
+    actix_web::{http::header::ContentType, web, HttpResponse},
+    anyhow::Context,
+    sqlx::PgPool,
+    uuid::Uuid,
+};
 
 pub async fn admin_dashboard(
-    session: Session,
+    session: TypedSession,
     pool: web::Data<PgPool>,
 ) -> Result<HttpResponse, actix_web::Error> {
     // Get session item using key `user_id`
-    let username = if let Some(user_id) = session.get::<Uuid>("user_id").map_err(e500)? {
+    let username = if let Some(user_id) = session.get_user_id().map_err(e500)? {
         get_username(user_id, &pool).await.map_err(e500)?
     } else {
         todo!();
