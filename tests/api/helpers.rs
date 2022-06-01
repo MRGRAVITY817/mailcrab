@@ -114,7 +114,7 @@ impl TestApp {
     /// Get HTML text from admin dashboard
     pub async fn get_admin_dashboard(&self) -> String {
         self.api_client
-            .get(&format!("{}/admin/dashbaord", &self.address))
+            .get(&format!("{}/admin/dashboard", &self.address))
             .send()
             .await
             .expect("Failed to execute request.")

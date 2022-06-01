@@ -42,7 +42,7 @@ pub async fn login_submit(
                 .insert("user_id", user_id)
                 .map_err(|e| login_redirect(LoginError::UnexpectedError(e.into())))?;
             Ok(HttpResponse::SeeOther()
-                .insert_header((LOCATION, "/admin/dashboard")) // Redirects to home when post succeeds.
+                .insert_header((LOCATION, "/admin/dashboard")) // Redirects to dashboard when post succeeds.
                 .finish())
         }
         Err(e) => {
