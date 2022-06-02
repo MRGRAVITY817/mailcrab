@@ -111,16 +111,18 @@ impl TestApp {
             .unwrap()
     }
 
-    /// Get HTML text from admin dashboard
-    pub async fn get_admin_dashboard(&self) -> String {
+    /// Get response from `admin/dashboard`
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/admin/dashboard", &self.address))
             .send()
             .await
             .expect("Failed to execute request.")
-            .text()
-            .await
-            .unwrap()
+    }
+
+    /// Get HTML string from `admin/dashboard`
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
     }
 }
 
@@ -207,6 +209,7 @@ pub async fn spawn_app() -> TestApp {
     test_app
 }
 
+/// Configure Postgres database
 async fn configure_database(config: &DatabaseSettings) -> PgPool {
     // Create database
     let mut connection = PgConnection::connect_with(&config.without_db())
