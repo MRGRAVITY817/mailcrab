@@ -5,11 +5,12 @@ use {
         session_state::TypedSession,
         utils::{e500, see_other},
     },
-    actix_web::{web, HttpResponse},
+    actix_web::{error::InternalError, web, HttpResponse},
     actix_web_flash_messages::FlashMessage,
     secrecy::ExposeSecret,
     secrecy::Secret,
     sqlx::PgPool,
+    uuid::Uuid,
 };
 
 #[derive(serde::Deserialize)]
@@ -17,6 +18,18 @@ pub struct FormData {
     current_password: Secret<String>,
     new_password: Secret<String>,
     new_password_check: Secret<String>,
+}
+
+async fn reject_anonymous_users(session: TypedSession) -> Result<Uuid, actix_web::Error> {
+    match session.get_user_id().map_err(e500)? {
+        Some(user_id) => Ok(user_id),
+        None => {
+            let response = see_other("/login");
+            let e = anyhow::anyhow!("The user has not logged in");
+
+            Err(InternalError::from_response(e, response).into())
+        }
+    }
 }
 
 pub async fn change_password(
@@ -28,12 +41,7 @@ pub async fn change_password(
     if session.get_user_id().map_err(e500)?.is_none() {
         return Ok(see_other("/login"));
     }
-    let user_id = session.get_user_id().map_err(e500)?;
-    // If given `user_id` doesn't exists in redis session, redirect to `login` page
-    if user_id.is_none() {
-        return Ok(see_other("/login"));
-    }
-    let user_id = user_id.unwrap();
+    let user_id = reject_anonymous_users(session).await?;
     // Check if new password is too short or too long (should be > 12 && < 128 chars)
     if form.new_password.expose_secret().chars().count().le(&12)
         || form.new_password.expose_secret().chars().count().ge(&128)
