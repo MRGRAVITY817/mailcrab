@@ -34,6 +34,14 @@ pub async fn change_password(
         return Ok(see_other("/login"));
     }
     let user_id = user_id.unwrap();
+    // Check if new password is too short or too long (should be > 12 && < 128 chars)
+    if form.new_password.expose_secret().chars().count().le(&12)
+        || form.new_password.expose_secret().chars().count().ge(&128)
+    {
+        FlashMessage::error("Password should be longer that 12 chars and shorter than 128 chars.")
+            .send();
+        return Ok(see_other("/admin/password"));
+    }
     // Check if two input data for new password is equal
     if form.new_password.expose_secret() != form.new_password_check.expose_secret() {
         // If not, send flash message to indicate error to user on page.
