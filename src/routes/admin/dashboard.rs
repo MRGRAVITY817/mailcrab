@@ -1,9 +1,8 @@
-
 use {
     crate::session_state::TypedSession,
-reqwest::header::LOCATION,
     actix_web::{http::header::ContentType, web, HttpResponse},
     anyhow::Context,
+    reqwest::header::LOCATION,
     sqlx::PgPool,
     uuid::Uuid,
 };
@@ -17,7 +16,9 @@ pub async fn admin_dashboard(
         get_username(user_id, &pool).await.map_err(e500)?
     } else {
         // Redirect to login page when the given user session is missing
-        return Ok(HttpResponse::SeeOther().insert_header((LOCATION, "/login")).finish());
+        return Ok(HttpResponse::SeeOther()
+            .insert_header((LOCATION, "/login"))
+            .finish());
     };
 
     Ok(HttpResponse::Ok()
