@@ -4,7 +4,7 @@ use {
         email_client::EmailClient,
         routes::{
             admin_dashboard, change_password, change_password_form, confirm, health_check, home,
-            login_form, login_submit, publish_newsletter, subscribe,
+            log_out, login_form, login_submit, publish_newsletter, subscribe,
         },
     },
     actix_session::{storage::RedisSessionStore, SessionMiddleware},
@@ -107,6 +107,7 @@ async fn run(
             .route("/admin/dashboard", web::get().to(admin_dashboard))
             .route("/admin/password", web::get().to(change_password_form))
             .route("/admin/password", web::post().to(change_password))
+            .route("/admin/logout", web::post().to(log_out))
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

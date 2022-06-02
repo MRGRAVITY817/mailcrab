@@ -23,6 +23,7 @@ impl FromRequest for TypedSession {
 impl TypedSession {
     const USER_ID_KEY: &'static str = "user_id";
 
+    /// Renew user session when login
     pub fn renew(&self) {
         self.0.renew()
     }
@@ -33,5 +34,10 @@ impl TypedSession {
 
     pub fn get_user_id(&self) -> Result<Option<Uuid>, serde_json::Error> {
         self.0.get(Self::USER_ID_KEY)
+    }
+
+    /// Remove session when user logs out
+    pub fn log_out(self) {
+        self.0.purge()
     }
 }
