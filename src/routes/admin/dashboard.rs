@@ -1,25 +1,17 @@
 use {
-    crate::{session_state::TypedSession, utils::e500},
+    crate::{authentication::UserId, utils::e500},
     actix_web::{http::header::ContentType, web, HttpResponse},
     anyhow::Context,
-    reqwest::header::LOCATION,
     sqlx::PgPool,
     uuid::Uuid,
 };
 
 pub async fn admin_dashboard(
-    session: TypedSession,
     pool: web::Data<PgPool>,
+    user_id: web::ReqData<UserId>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    // Get session item using key `user_id`
-    let username = if let Some(user_id) = session.get_user_id().map_err(e500)? {
-        get_username(user_id, &pool).await.map_err(e500)?
-    } else {
-        // Redirect to login page when the given user session is missing
-        return Ok(HttpResponse::SeeOther()
-            .insert_header((LOCATION, "/login"))
-            .finish());
-    };
+    let user_id = user_id.into_inner();
+    let username = get_username(*user_id, &pool).await.map_err(e500)?;
 
     Ok(HttpResponse::Ok()
         .content_type(ContentType::html())
