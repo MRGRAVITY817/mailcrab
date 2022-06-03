@@ -125,7 +125,8 @@ async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks 
 async fn requests_missing_authorization_are_rejected() {
     // Arrange
     let test_app = spawn_app().await;
-    let response = reqwest::Client::new()
+    let response = test_app
+        .api_client
         .post(&format!("{}/newsletters", &test_app.address))
         .json(&serde_json::json!({
             "title": "Newsletter title",
@@ -164,7 +165,8 @@ async fn non_existing_user_is_rejected() {
     let password = Uuid::new_v4().to_string();
 
     // Act
-    let response = reqwest::Client::new()
+    let response = test_app
+        .api_client
         .post(&format!("{}/newsletters", &test_app.address))
         .basic_auth(username, Some(password))
         .json(&serde_json::json!({
@@ -196,7 +198,8 @@ async fn invalid_password_is_rejected() {
     assert_ne!(test_app.test_user.password, password);
 
     // Act
-    let response = reqwest::Client::new()
+    let response = test_app
+        .api_client
         .post(&format!("{}/newsletters", &test_app.address))
         .basic_auth(username, Some(password))
         .json(&serde_json::json!({
