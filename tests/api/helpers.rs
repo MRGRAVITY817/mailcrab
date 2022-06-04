@@ -162,7 +162,7 @@ impl TestApp {
     /// Post request for logging user out
     pub async fn post_logout(&self) -> reqwest::Response {
         self.api_client
-            .post(&format!("{}/admin/logout", &self.address))
+            .post(self.app_route("admin/logout"))
             .send()
             .await
             .expect("Failed to execute request.")
@@ -172,6 +172,19 @@ impl TestApp {
     pub async fn get_admin_newsletter(&self) -> reqwest::Response {
         self.api_client
             .get(self.app_route("admin/newsletter"))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    /// Publish issue with title, text/html content
+    pub async fn post_publish_issue<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .post(self.app_route("admin/newsletter"))
+            .form(body)
             .send()
             .await
             .expect("Failed to execute request.")
