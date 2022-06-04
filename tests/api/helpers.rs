@@ -177,6 +177,11 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    /// GET HTML string from `admin/newsletter` page
+    pub async fn get_admin_newsletter_html(&self) -> String {
+        self.get_admin_newsletter().await.text().await.unwrap()
+    }
+
     /// Publish issue with title, text/html content
     pub async fn post_publish_issue<Body>(&self, body: &Body) -> reqwest::Response
     where
