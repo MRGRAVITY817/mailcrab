@@ -29,9 +29,11 @@ pub async fn publish_issue(
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    // Get all the confirmed subscribers
     let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
     for subscriber in subscribers {
         match subscriber {
+            // Send issue to all of confirmed subscribers
             Ok(subscriber) => {
                 email_client
                     .send_email(
@@ -46,11 +48,12 @@ pub async fn publish_issue(
                     })
                     .map_err(e500)?;
             }
+            // If subscriber's email address has a problem, omit error
             Err(error) => {
                 tracing::warn!(
-                error.cause_chain = ?error,
-                error.message =  %error,
-                "Skipping a confirmed subscriber. Their stored contact details are invalid",
+                    error.cause_chain = ?error,
+                    error.message =  %error,
+                    "Skipping a confirmed subscriber. Their stored contact details are invalid",
                 );
             }
         }
