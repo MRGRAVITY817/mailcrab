@@ -1,5 +1,5 @@
 use {
-    crate::helpers::{spawn_app, ConfirmationLinks, TestApp},
+    crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp},
     uuid::Uuid,
     wiremock::{
         matchers::{any, method, path},
@@ -219,4 +219,44 @@ async fn invalid_password_is_rejected() {
         r#"Basic realm="publish""#,
         response.headers()["WWW-Authenticate"]
     );
+}
+
+#[tokio::test]
+async fn newsletter_creation_is_idempotent() {
+    // Arrange
+    let test_app = spawn_app().await;
+    create_confirmed_subscriber(&test_app).await;
+    test_app.test_user.login(&test_app).await;
+
+    // Create a mock email server that has `POST /email` API
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1) // works only once
+        .mount(&test_app.email_server)
+        .await;
+
+    // Act & Assert
+    // 1. Submit newsletter form
+    let newsletter_request_body = serde_json::json!({
+        "title": "Newsletter Title",
+        "text_content": "Newsletter Text Content",
+        "html_content": "<p>Newsletter HTML content</p>",
+        // we expect the idempotency_key as part of form data, not as a header
+        "idempotency_key": uuid::Uuid::new_v4().to_string(),
+    });
+    let response = test_app.post_publish_issue(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletter");
+
+    // 2. Follow the redirect
+    let html_page = test_app.get_admin_newsletter_html().await;
+    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+
+    // 3. Submit newsletter form **again**
+    let response = test_app.post_publish_issue(&newsletter_request_body).await;
+    assert_is_redirect_to(&response, "/admin/newsletter");
+
+    // 4. Follow the redirect
+    let html_page = test_app.get_admin_newsletter_html().await;
+    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
 }
