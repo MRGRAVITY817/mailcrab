@@ -1,3 +1,8 @@
+use crate::{
+    idempotency::{get_saved_response, IdempotencyKey},
+    utils::e400,
+};
+
 use {
     crate::{
         authentication::UserId,
@@ -30,14 +35,23 @@ pub async fn publish_issue(
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    // Get all the confirmed subscribers
-    let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
     let FormData {
         title,
         text_content,
         html_content,
         idempotency_key,
     } = form.0;
+    // Return early if we have a saved response in the database, since it's already been sent
+    let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
+    if let Some(saved_response) = get_saved_response(&pool, &idempotency_key, **user_id)
+        .await
+        .map_err(e500)?
+    {
+        return Ok(saved_response);
+    }
+
+    // Get all the confirmed subscribers
+    let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
     for subscriber in subscribers {
         match subscriber {
             // Send issue to all of confirmed subscribers
@@ -61,6 +75,7 @@ pub async fn publish_issue(
         }
     }
 
+    // Send a flash message that we've published all the newsletters.
     FlashMessage::info("The newsletter issue has been published!").send();
     Ok(see_other("/admin/newsletter"))
 }
