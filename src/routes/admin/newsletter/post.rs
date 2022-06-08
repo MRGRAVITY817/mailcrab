@@ -32,17 +32,18 @@ pub async fn publish_issue(
 ) -> Result<HttpResponse, actix_web::Error> {
     // Get all the confirmed subscribers
     let subscribers = get_confirmed_subscribers(&pool).await.map_err(e500)?;
+    let FormData {
+        title,
+        text_content,
+        html_content,
+        idempotency_key,
+    } = form.0;
     for subscriber in subscribers {
         match subscriber {
             // Send issue to all of confirmed subscribers
             Ok(subscriber) => {
                 email_client
-                    .send_email(
-                        &subscriber.email,
-                        &form.title,
-                        &form.html_content,
-                        &form.text_content,
-                    )
+                    .send_email(&subscriber.email, &title, &html_content, &text_content)
                     .await
                     .with_context(|| {
                         format!("Failed to send newsletter issue to {}", subscriber.email)

@@ -22,6 +22,7 @@ async fn should_be_logged_in_to_publish_newsletter_issue() {
             "title": "Title",
             "text_content": "Text Content",
             "html_content": "<p>Html Content</p>",
+            "idempotency_key": uuid::Uuid::new_v4().to_string(),
         }))
         .await;
 
@@ -52,6 +53,7 @@ async fn should_publish_newsletter_issue() {
             "title": "Title",
             "text_content": "Text Content",
             "html_content": "<p>Html Content</p>",
+            "idempotency_key": uuid::Uuid::new_v4().to_string(),
         }))
         .await;
     assert_is_redirect_to(&response, "/admin/newsletter");
