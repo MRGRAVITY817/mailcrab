@@ -1,5 +1,6 @@
 use {
     crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp},
+    std::time::Duration,
     uuid::Uuid,
     wiremock::{
         matchers::{any, method, path},
@@ -322,4 +323,36 @@ async fn should_publish_newsletter_issue() {
     // 3. Follow the redirect
     let html_page = test_app.get_admin_newsletter_html().await;
     assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+}
+
+#[tokio::test]
+async fn concurrent_form_submission_is_handled_gracefully() {
+    // Arrange
+    let test_app = spawn_app().await;
+    create_confirmed_subscriber(&test_app).await;
+    test_app.test_user.login(&test_app).await;
+
+    Mock::given(path("/email"))
+        .and(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(2)))
+        .expect(1)
+        .mount(&test_app.email_server)
+        .await;
+    // Act
+    let newsletter_request_body = serde_json::json!({
+        "title": "Title",
+        "text_content": "Text Content",
+        "html_content": "<p>Html Content</p>",
+        "idempotency_key": uuid::Uuid::new_v4().to_string(),
+    });
+    let response1 = test_app.post_publish_issue(&newsletter_request_body);
+    let response2 = test_app.post_publish_issue(&newsletter_request_body);
+    // Submit two newsletter forms concurrently using `tokio::join!`
+    let (response1, response2) = tokio::join!(response1, response2);
+    // Assert
+    assert_eq!(response1.status(), response2.status());
+    assert_eq!(
+        response1.text().await.unwrap(),
+        response2.text().await.unwrap()
+    );
 }
