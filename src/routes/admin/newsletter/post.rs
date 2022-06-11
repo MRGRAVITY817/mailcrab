@@ -77,8 +77,9 @@ pub async fn publish_issue(
     let response = see_other("/admin/newsletter");
     let response = save_response(&pool, &idempotency_key, **user_id, response)
         .await
-        .map_err(e500);
-    Ok(see_other("/admin/newsletter"))
+        .map_err(e500)?;
+
+    Ok(response)
 }
 
 /// Subscriber whose status is `confirmed`
