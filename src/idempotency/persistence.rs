@@ -56,8 +56,8 @@ pub async fn save_response(
     // Since `MessageBody::Error` is not `Send + Sync` type,
     // we need to manually map the error
     let body = to_bytes(body).await.map_err(|e| anyhow::anyhow!("{}", e))?;
-    let status_code = http_response.status().as_u16() as i16;
-    let headers = http_response
+    let status_code = response_head.status().as_u16() as i16;
+    let headers = response_head
         .headers()
         .iter()
         .map(|(name, value)| {

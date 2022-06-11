@@ -1,13 +1,10 @@
-use crate::{
-    idempotency::{get_saved_response, IdempotencyKey},
-    utils::e400,
-};
-
 use {
     crate::{
         authentication::UserId,
         domain::SubscriberEmail,
         email_client::EmailClient,
+        idempotency::{get_saved_response, save_response, IdempotencyKey},
+        utils::e400,
         utils::{e500, see_other},
     },
     actix_web::{web, HttpResponse},
@@ -77,6 +74,10 @@ pub async fn publish_issue(
 
     // Send a flash message that we've published all the newsletters.
     FlashMessage::info("The newsletter issue has been published!").send();
+    let response = see_other("/admin/newsletter");
+    let response = save_response(&pool, &idempotency_key, **user_id, response)
+        .await
+        .map_err(e500);
     Ok(see_other("/admin/newsletter"))
 }
 
