@@ -92,6 +92,7 @@ pub async fn save_response(
     Ok(http_response)
 }
 
+/// Provide information to sqlx about our array type `_header_pair`
 impl PgHasArrayType for HeaderPairRecord {
     fn array_type_info() -> sqlx::postgres::PgTypeInfo {
         sqlx::postgres::PgTypeInfo::with_name("_header_pair")
