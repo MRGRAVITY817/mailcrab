@@ -29,6 +29,7 @@ rand = {version = "0.8", features = ["std_rng"]}
 secrecy = {version = "0.8", features = ["serde"]}
 serde = {version = "1", features = ["derive"]}
 serde-aux = "3"
+serde_urlencoded = "0.7.1"
 sha2 = "0.10"
 thiserror = "1"
 tokio = {version = "1", features = ["macros", "rt-multi-thread"]}
