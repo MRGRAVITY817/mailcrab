@@ -75,7 +75,7 @@ pub async fn get_saved_response(
     if let Some(r) = saved_response {
         let status_code = StatusCode::from_u16(r.response_status_code.try_into()?)?;
         let mut response = HttpResponse::build(status_code);
-        for HeaderPairRecord { name, value } in r.response_headers {
+        for HeaderPairRecord { name, value } in r.response_headers.unwrap() {
             response.append_header((name, value));
         }
         Ok(Some(response.body(r.response_body)))
@@ -108,15 +108,14 @@ pub async fn save_response(
 
     sqlx::query_unchecked!(
         r#"
-        INSERT INTO idempotency (
-            user_id,
-            idempotency_key,
-            response_status_code,
-            response_headers,
-            response_body,
-            created_at
-        )
-        VALUES ($1, $2, $3, $4, $5, now())
+        UPDATE idempotency
+        SET 
+            response_status_code = $3,
+            response_headers = $4,
+            response_body = $5
+        WHERE
+            user_id = $1 AND
+            idempotency_key = $2
         "#,
         user_id,
         idempotency_key.as_ref(),
