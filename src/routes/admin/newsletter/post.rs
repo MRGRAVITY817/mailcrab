@@ -1,3 +1,5 @@
+use crate::idempotency::{try_processing, NextAction};
+
 use {
     crate::{
         authentication::UserId,
@@ -21,6 +23,10 @@ pub struct FormData {
     idempotency_key: String,
 }
 
+fn success_message() -> FlashMessage {
+    FlashMessage::info("The newsletter issue has been published!")
+}
+
 #[tracing::instrument(
     name = "Publish a newsletter issue",
     skip(form, pool, email_client, user_id),
@@ -40,11 +46,15 @@ pub async fn publish_issue(
     } = form.0;
     // Return early if we have a saved response in the database, since it's already been sent
     let idempotency_key: IdempotencyKey = idempotency_key.try_into().map_err(e400)?;
-    if let Some(saved_response) = get_saved_response(&pool, &idempotency_key, **user_id)
+    match try_processing(&pool, &idempotency_key, **user_id)
         .await
         .map_err(e500)?
     {
-        return Ok(saved_response);
+        NextAction::StartProcessing => {}
+        NextAction::ReturnSavedResponse(saved_response) => {
+            success_message().send();
+            return Ok(saved_response);
+        }
     }
 
     // Get all the confirmed subscribers
@@ -73,7 +83,7 @@ pub async fn publish_issue(
     }
 
     // Send a flash message that we've published all the newsletters.
-    FlashMessage::info("The newsletter issue has been published!").send();
+    success_message().send();
     let response = see_other("/admin/newsletter");
     let response = save_response(&pool, &idempotency_key, **user_id, response)
         .await
