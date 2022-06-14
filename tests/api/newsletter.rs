@@ -1,8 +1,9 @@
-use fake::faker::internet::en::SafeEmail;
-
 use {
     crate::helpers::{assert_is_redirect_to, spawn_app, ConfirmationLinks, TestApp},
-    fake::{faker::name::en::Name, Fake},
+    fake::{
+        faker::{internet::en::SafeEmail, name::en::Name},
+        Fake,
+    },
     std::time::Duration,
     uuid::Uuid,
     wiremock::{
@@ -396,7 +397,12 @@ async fn transient_errors_do_not_cause_duplicate_deliveries_on_retries() {
         .expect(1)
         .mount(&test_app.email_server)
         .await;
-
+    when_sending_an_email()
+        .respond_with(ResponseTemplate::new(500)) // Fails for the second subscriber
+        .up_to_n_times(1)
+        .expect(1)
+        .mount(&test_app.email_server)
+        .await;
     let response = test_app.post_publish_issue(&newsletter_request_body).await;
     // Email delivery should fail for the second user
     assert_eq!(response.status().as_u16(), 500);

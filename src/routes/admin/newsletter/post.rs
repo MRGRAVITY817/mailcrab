@@ -84,7 +84,7 @@ pub async fn publish_issue(
     // Send a flash message that we've published all the newsletters.
     success_message().send();
     let response = see_other("/admin/newsletter");
-    let response = save_response(&idempotency_key, **user_id, response, transaction)
+    let response = save_response(&idempotency_key, **user_id, response, *transaction)
         .await
         .map_err(e500)?;
 
