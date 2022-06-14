@@ -4,13 +4,13 @@ use {
         domain::SubscriberEmail,
         email_client::EmailClient,
         idempotency::{save_response, try_processing, IdempotencyKey, NextAction},
-        utils::e400,
-        utils::{e500, see_other},
+        utils::{e400, e500, see_other},
     },
     actix_web::{web, HttpResponse},
     actix_web_flash_messages::FlashMessage,
     anyhow::Context,
-    sqlx::PgPool,
+    sqlx::{PgPool, Postgres, Transaction},
+    uuid::Uuid,
 };
 
 #[derive(serde::Deserialize)]
@@ -118,4 +118,35 @@ async fn get_confirmed_subscribers(
     .collect();
 
     Ok(confirmed_subscribers)
+}
+
+/// Insert a new row in `newsletter_issues` table
+#[tracing::instrument(skip_all)]
+async fn insert_newsletter_issue(
+    transaction: &mut Transaction<'_, Postgres>,
+    title: &str,
+    text_content: &str,
+    html_content: &str,
+) -> Result<Uuid, sqlx::Error> {
+    let newsletter_issue_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO newsletter_issues (
+          newsletter_issue_id,
+          title,
+          text_content,
+          html_content,
+          published_at
+        )
+        VALUES ($1, $2, $3, $4, now())
+        "#,
+        newsletter_issue_id,
+        title,
+        text_content,
+        html_content
+    )
+    .execute(transaction)
+    .await?;
+
+    Ok(newsletter_issue_id)
 }
