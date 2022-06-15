@@ -1,15 +1,39 @@
-use sqlx::{PgPool, Transaction, Postgres};
-use tracing::{Span, field::display};
-use uuid::Uuid;
+use {
+    crate::{domain::SubscriberEmail, email_client::EmailClient},
+    sqlx::{PgPool, Postgres, Transaction},
+    tracing::{field::display, Span},
+    uuid::Uuid,
+};
 
-use crate::email_client::EmailClient;
+struct NewsletterIssue {
+    title: String,
+    text_content: String,
+    html_content: String,
+}
+
+#[tracing::instrument(skip_all)]
+async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, anyhow::Error> {
+    let issue = sqlx::query_as!(
+        NewsletterIssue,
+        r#"
+        SELECT title, text_content, html_content
+        FROM newsletter_issues
+        WHERE newsletter_issue_id = $1
+        "#,
+        issue_id
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(issue)
+}
 
 #[tracing::instrument(
-    skip_all, 
+    skip_all,
     fields(
-        newsletter_issue_id=tracing::field::Empty, 
+        newsletter_issue_id=tracing::field::Empty,
         subscriber_email=tracing::field::Empty
-    ), 
+    ),
     err
 )]
 async fn try_execute_task(pool: &PgPool, email_client: &EmailClient) -> Result<(), anyhow::Error> {
@@ -19,7 +43,35 @@ async fn try_execute_task(pool: &PgPool, email_client: &EmailClient) -> Result<(
             .record("newsletter_issue_id", &display(issue_id))
             .record("subscriber_email", &display(&email));
 
-        // TODO: send email
+        match SubscriberEmail::parse(email.clone()) {
+            Ok(email) => {
+                let issue = get_issue(pool, issue_id).await?;
+                if let Err(e) = email_client
+                    .send_email(
+                        &email,
+                        &issue.title,
+                        &issue.html_content,
+                        &issue.text_content,
+                    )
+                    .await
+                {
+                    tracing::error!(
+                       error.cause_chain = ?e,
+                       error.message = %e,
+                       "Failed to deliver issue to confirmed subscriber. \
+                        Skipping."
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::error!(
+                    error.cause_chain = ?e,
+                    error.message = %e,
+                    "Skipping a confirmed subscriber. \
+                     Their stored contact details are invalid."
+                );
+            }
+        }
         delete_task(transaction, issue_id, &email).await?;
     }
 
@@ -57,15 +109,23 @@ async fn dequeue_task(
 }
 
 #[tracing::instrument(skip_all)]
-async fn delete_task(mut transaction: PgTransaction, issue_id: Uuid, email: &str) -> Result<(), anyhow::Error> {
+async fn delete_task(
+    mut transaction: PgTransaction,
+    issue_id: Uuid,
+    email: &str,
+) -> Result<(), anyhow::Error> {
     sqlx::query!(
         r#"
         DELETE FROM issue_delivery_queue
         WHERE
             newsletter_issue_id = $1 AND
             subscriber_email = $2
-        "#, issue_id, email
-        ).execute(&mut transaction).await?;
+        "#,
+        issue_id,
+        email
+    )
+    .execute(&mut transaction)
+    .await?;
     transaction.commit().await?;
 
     Ok(())
