@@ -1,6 +1,5 @@
-use tokio::task::JoinHandle;
-
 use {
+    tokio::task::JoinHandle,
     tracing::{subscriber::set_global_default, Subscriber},
     tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer},
     tracing_log::LogTracer,

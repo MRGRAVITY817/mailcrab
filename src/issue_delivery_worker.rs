@@ -1,10 +1,10 @@
-use std::time::Duration;
-
-use crate::{configuration::Settings, startup::get_db_pool};
-
 use {
-    crate::{domain::SubscriberEmail, email_client::EmailClient},
+    crate::{
+        configuration::Settings, domain::SubscriberEmail, email_client::EmailClient,
+        startup::get_db_pool,
+    },
     sqlx::{PgPool, Postgres, Transaction},
+    std::time::Duration,
     tracing::{field::display, Span},
     uuid::Uuid,
 };

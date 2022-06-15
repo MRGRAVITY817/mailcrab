@@ -1,10 +1,9 @@
-use mailcrab::issue_delivery_worker::{try_execute_task, ExecutionOutcome};
-
 use {
     argon2::{password_hash::SaltString, Algorithm, Argon2, Params, PasswordHasher, Version},
     mailcrab::{
         configuration::{get_config, DatabaseSettings},
         email_client::EmailClient,
+        issue_delivery_worker::{try_execute_task, ExecutionOutcome},
         startup::{get_db_pool, Application},
         telemetry::{get_subscriber, init_subscriber},
     },
