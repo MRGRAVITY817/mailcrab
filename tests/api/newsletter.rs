@@ -70,6 +70,8 @@ async fn newsletter_are_not_delivered_to_unconfirmed_subscribers() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
+
+    test_app.dispatch_all_pending_emails().await;
 }
 
 #[tokio::test]
@@ -78,8 +80,7 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
     let test_app = spawn_app().await;
     create_confirmed_subscriber(&test_app).await;
 
-    Mock::given(path("/email"))
-        .and(method("POST"))
+    when_sending_an_email()
         .respond_with(ResponseTemplate::new(200))
         .expect(1)
         .mount(&test_app.email_server)
@@ -97,6 +98,8 @@ async fn newsletters_are_delivered_to_confirmed_subscribers() {
 
     // Assert
     assert_eq!(response.status().as_u16(), 200);
+
+    test_app.dispatch_all_pending_emails().await;
 }
 
 async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks {
@@ -110,8 +113,7 @@ async fn create_unconfirmed_subscriber(test_app: &TestApp) -> ConfirmationLinks 
     }))
     .unwrap();
 
-    let _mock_guard = Mock::given(path("/email"))
-        .and(method("POST"))
+    let _mock_guard = when_sending_an_email()
         .respond_with(ResponseTemplate::new(200))
         .named("Create unconfirmed subscriber")
         .expect(1)
@@ -243,8 +245,7 @@ async fn newsletter_creation_is_idempotent() {
     test_app.test_user.login(&test_app).await;
 
     // Create a mock email server that has `POST /email` API
-    Mock::given(path("/email"))
-        .and(method("POST"))
+    when_sending_an_email()
         .respond_with(ResponseTemplate::new(200))
         .expect(1) // works only once
         .mount(&test_app.email_server)
@@ -264,7 +265,10 @@ async fn newsletter_creation_is_idempotent() {
 
     // 2. Follow the redirect
     let html_page = test_app.get_admin_newsletter_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - \
+               emails will go out shortly.</i></p>"
+    ));
 
     // 3. Submit newsletter form **again**
     let response = test_app.post_publish_issue(&newsletter_request_body).await;
@@ -272,7 +276,12 @@ async fn newsletter_creation_is_idempotent() {
 
     // 4. Follow the redirect
     let html_page = test_app.get_admin_newsletter_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - \
+               emails will go out shortly.</i></p>"
+    ));
+
+    test_app.dispatch_all_pending_emails().await;
 }
 
 #[tokio::test]
@@ -335,7 +344,11 @@ async fn should_publish_newsletter_issue() {
 
     // 3. Follow the redirect
     let html_page = test_app.get_admin_newsletter_html().await;
-    assert!(html_page.contains("<p><i>The newsletter issue has been published!</i></p>"));
+    assert!(html_page.contains(
+        "<p><i>The newsletter issue has been accepted - \
+               emails will go out shortly.</i></p>"
+    ));
+    test_app.dispatch_all_pending_emails().await;
 }
 
 #[tokio::test]
@@ -345,8 +358,7 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     create_confirmed_subscriber(&test_app).await;
     test_app.test_user.login(&test_app).await;
 
-    Mock::given(path("/email"))
-        .and(method("POST"))
+    when_sending_an_email()
         .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(2)))
         .expect(1)
         .mount(&test_app.email_server)
@@ -362,58 +374,17 @@ async fn concurrent_form_submission_is_handled_gracefully() {
     let response2 = test_app.post_publish_issue(&newsletter_request_body);
     // Submit two newsletter forms concurrently using `tokio::join!`
     let (response1, response2) = tokio::join!(response1, response2);
+
     // Assert
     assert_eq!(response1.status(), response2.status());
     assert_eq!(
         response1.text().await.unwrap(),
         response2.text().await.unwrap()
     );
+
+    test_app.dispatch_all_pending_emails().await;
 }
 
 fn when_sending_an_email() -> MockBuilder {
     Mock::given(path("/email")).and(method("POST"))
-}
-
-#[tokio::test]
-async fn transient_errors_do_not_cause_duplicate_deliveries_on_retries() {
-    // Arrange
-    let test_app = spawn_app().await;
-    let newsletter_request_body = serde_json::json!({
-        "title": "Title",
-        "text_content": "Text Content",
-        "html_content": "<p>Html Content</p>",
-        "idempotency_key": uuid::Uuid::new_v4().to_string(),
-    });
-    // More subscribers!
-    create_confirmed_subscriber(&test_app).await;
-    create_confirmed_subscriber(&test_app).await;
-    test_app.test_user.login(&test_app).await;
-
-    // Act & Assert
-    // 1. Submit newsletter form
-    when_sending_an_email()
-        .respond_with(ResponseTemplate::new(200))
-        .up_to_n_times(1)
-        .expect(1)
-        .mount(&test_app.email_server)
-        .await;
-    when_sending_an_email()
-        .respond_with(ResponseTemplate::new(500)) // Fails for the second subscriber
-        .up_to_n_times(1)
-        .expect(1)
-        .mount(&test_app.email_server)
-        .await;
-    let response = test_app.post_publish_issue(&newsletter_request_body).await;
-    // Email delivery should fail for the second user
-    assert_eq!(response.status().as_u16(), 500);
-
-    // 2. Retry submitting the form
-    when_sending_an_email()
-        .respond_with(ResponseTemplate::new(200))
-        .expect(1)
-        .named("Delivery retry")
-        .mount(&test_app.email_server)
-        .await;
-    // Email delivery will succeed for both subscribers now
-    assert_eq!(response.status().as_u16(), 303);
 }
