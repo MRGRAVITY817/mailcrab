@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use {
     crate::{domain::SubscriberEmail, email_client::EmailClient},
     sqlx::{PgPool, Postgres, Transaction},
@@ -28,6 +30,27 @@ async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, any
     Ok(issue)
 }
 
+/// Keeps pulling from queue until it fullfills tasks
+async fn worker_loop(pool: PgPool, email_client: EmailClient) -> Result<(), anyhow::Error> {
+    loop {
+        match try_execute_task(&pool, &email_client).await {
+            Ok(ExecutionOutcome::EmptyQueue) => {
+                tokio::time::sleep(Duration::from_secs(10)).await;
+            }
+            Ok(ExecutionOutcome::TaskCompleted) => {}
+            Err(_) => {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        }
+    }
+}
+
+enum ExecutionOutcome {
+    TaskCompleted,
+    EmptyQueue,
+}
+
+/// Takes single task item from queue and execute(send email).
 #[tracing::instrument(
     skip_all,
     fields(
@@ -36,46 +59,53 @@ async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, any
     ),
     err
 )]
-async fn try_execute_task(pool: &PgPool, email_client: &EmailClient) -> Result<(), anyhow::Error> {
-    if let Some((transaction, issue_id, email)) = dequeue_task(pool).await? {
-        // `Span::current` will send records to fields only when this block is being executed
-        Span::current()
-            .record("newsletter_issue_id", &display(issue_id))
-            .record("subscriber_email", &display(&email));
+async fn try_execute_task(
+    pool: &PgPool,
+    email_client: &EmailClient,
+) -> Result<ExecutionOutcome, anyhow::Error> {
+    let task = dequeue_task(pool).await?;
+    // if the queue is empty, return
+    if task.is_none() {
+        return Ok(ExecutionOutcome::EmptyQueue);
+    }
+    let (transaction, issue_id, email) = task.unwrap();
+    // `Span::current` will send records to fields only when this block is being executed
+    Span::current()
+        .record("newsletter_issue_id", &display(issue_id))
+        .record("subscriber_email", &display(&email));
 
-        match SubscriberEmail::parse(email.clone()) {
-            Ok(email) => {
-                let issue = get_issue(pool, issue_id).await?;
-                if let Err(e) = email_client
-                    .send_email(
-                        &email,
-                        &issue.title,
-                        &issue.html_content,
-                        &issue.text_content,
-                    )
-                    .await
-                {
-                    tracing::error!(
-                       error.cause_chain = ?e,
-                       error.message = %e,
-                       "Failed to deliver issue to confirmed subscriber. \
-                        Skipping."
-                    );
-                }
-            }
-            Err(e) => {
+    match SubscriberEmail::parse(email.clone()) {
+        Ok(email) => {
+            let issue = get_issue(pool, issue_id).await?;
+            if let Err(e) = email_client
+                .send_email(
+                    &email,
+                    &issue.title,
+                    &issue.html_content,
+                    &issue.text_content,
+                )
+                .await
+            {
                 tracing::error!(
-                    error.cause_chain = ?e,
-                    error.message = %e,
-                    "Skipping a confirmed subscriber. \
-                     Their stored contact details are invalid."
+                   error.cause_chain = ?e,
+                   error.message = %e,
+                   "Failed to deliver issue to confirmed subscriber. \
+                    Skipping."
                 );
             }
         }
-        delete_task(transaction, issue_id, &email).await?;
+        Err(e) => {
+            tracing::error!(
+                error.cause_chain = ?e,
+                error.message = %e,
+                "Skipping a confirmed subscriber. \
+                 Their stored contact details are invalid."
+            );
+        }
     }
+    delete_task(transaction, issue_id, &email).await?;
 
-    Ok(())
+    Ok(ExecutionOutcome::TaskCompleted)
 }
 
 type PgTransaction = Transaction<'static, Postgres>;
