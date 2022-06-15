@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::{configuration::Settings, startup::get_db_pool};
+
 use {
     crate::{domain::SubscriberEmail, email_client::EmailClient},
     sqlx::{PgPool, Postgres, Transaction},
@@ -28,6 +30,24 @@ async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, any
     .await?;
 
     Ok(issue)
+}
+
+/// Run worker with configuration values
+pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
+    let db_pool = get_db_pool(&configuration.database);
+    let sender_email = configuration
+        .email_client
+        .sender()
+        .expect("Invalid sender email address.");
+    let timeout = configuration.email_client.timeout();
+    let email_client = EmailClient::new(
+        configuration.email_client.base_url,
+        sender_email,
+        configuration.email_client.auth_token,
+        timeout,
+    );
+
+    worker_loop(db_pool, email_client).await
 }
 
 /// Keeps pulling from queue until it fullfills tasks
