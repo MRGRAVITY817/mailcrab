@@ -72,6 +72,7 @@ pub async fn publish_issue(
         .await
         .map_err(e500)?;
 
+    success_message().send();
     Ok(response)
 }
 
