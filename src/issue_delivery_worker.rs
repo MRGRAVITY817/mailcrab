@@ -33,19 +33,9 @@ async fn get_issue(pool: &PgPool, issue_id: Uuid) -> Result<NewsletterIssue, any
 }
 
 /// Run worker with configuration values
-pub async fn run_worker_until_stopped(configuration: Settings) -> Result<(), anyhow::Error> {
-    let db_pool = get_db_pool(&configuration.database);
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address.");
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.auth_token,
-        timeout,
-    );
+pub async fn run_worker_until_stopped(app_config: Settings) -> Result<(), anyhow::Error> {
+    let db_pool = get_db_pool(&app_config.database);
+    let email_client = app_config.email_client.client();
 
     worker_loop(db_pool, email_client).await
 }
@@ -65,7 +55,8 @@ async fn worker_loop(pool: PgPool, email_client: EmailClient) -> Result<(), anyh
     }
 }
 
-enum ExecutionOutcome {
+/// Completeness of tasks in queue
+pub enum ExecutionOutcome {
     TaskCompleted,
     EmptyQueue,
 }
@@ -79,7 +70,7 @@ enum ExecutionOutcome {
     ),
     err
 )]
-async fn try_execute_task(
+pub async fn try_execute_task(
     pool: &PgPool,
     email_client: &EmailClient,
 ) -> Result<ExecutionOutcome, anyhow::Error> {

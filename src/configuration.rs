@@ -1,3 +1,5 @@
+use crate::email_client::EmailClient;
+
 use {
     crate::domain::SubscriberEmail,
     secrecy::{ExposeSecret, Secret},
@@ -69,6 +71,12 @@ pub struct EmailClientSettings {
 }
 
 impl EmailClientSettings {
+    pub fn client(self) -> EmailClient {
+        let sender_email = self.sender().expect("Invalid sender email address.");
+        let timeout = self.timeout();
+        EmailClient::new(self.base_url, sender_email, self.auth_token, timeout)
+    }
+
     pub fn sender(&self) -> Result<SubscriberEmail, String> {
         SubscriberEmail::parse(self.sender_email.clone())
     }

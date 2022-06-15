@@ -1,7 +1,10 @@
+use mailcrab::issue_delivery_worker::{try_execute_task, ExecutionOutcome};
+
 use {
     argon2::{password_hash::SaltString, Algorithm, Argon2, Params, PasswordHasher, Version},
     mailcrab::{
         configuration::{get_config, DatabaseSettings},
+        email_client::EmailClient,
         startup::{get_db_pool, Application},
         telemetry::{get_subscriber, init_subscriber},
     },
@@ -36,9 +39,23 @@ pub struct TestApp {
     pub email_server: MockServer,
     pub test_user: TestUser,
     pub api_client: reqwest::Client,
+    pub email_client: EmailClient,
 }
 
 impl TestApp {
+    /// Consume all the messages in queue
+    pub async fn dispatch_all_pending_emails(&self) {
+        loop {
+            if let ExecutionOutcome::EmptyQueue =
+                try_execute_task(&self.db_pool, &self.email_client)
+                    .await
+                    .unwrap()
+            {
+                break;
+            }
+        }
+    }
+
     /// Return given route prepended with test app's address
     fn app_route(&self, route: &str) -> String {
         format!("{}/{}", self.address, route)
@@ -280,6 +297,7 @@ pub async fn spawn_app() -> TestApp {
         email_server,
         test_user: TestUser::generate(),
         api_client: client,
+        email_client: app_config.email_client.client(),
     };
 
     test_app.test_user.store(&test_app.db_pool).await;
